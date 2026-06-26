@@ -102,6 +102,23 @@ _session.apply_settings({
 _handles: dict[str, lt.torrent_handle] = {}   # magnet → handle
 _lock = threading.Lock()
 
+_PUBLIC_TRACKERS = [
+    'udp://tracker.opentrackr.org:1337/announce',
+    'udp://open.stealth.si:80/announce',
+    'udp://tracker.torrent.eu.org:451/announce',
+    'udp://tracker.tiny-vps.com:6969/announce',
+    'udp://open.demonii.com:1337/announce',
+    'udp://tracker.openbittorrent.com:6969/announce',
+    'udp://exodus.desync.com:6969/announce',
+    'udp://tracker.cyberia.is:6969/announce',
+    'udp://tracker.moeking.me:6969/announce',
+    'udp://tracker1.bt.moack.co.kr:80/announce',
+]
+
+def _inject_trackers(params: lt.add_torrent_params):
+    existing = set(params.trackers)
+    params.trackers = list(existing | set(_PUBLIC_TRACKERS))
+
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -138,6 +155,7 @@ def _fetch_metadata(magnet: str):
     try:
         params = lt.parse_magnet_uri(magnet)
         params.save_path = str(os.path.expanduser('~'))
+        _inject_trackers(params)
         handle = _session.add_torrent(params)
 
         deadline = time.monotonic() + 90
@@ -178,6 +196,7 @@ def _download(magnet: str, save_path: str):
     try:
         params = lt.parse_magnet_uri(magnet)
         params.save_path = save_path
+        _inject_trackers(params)
         # sparse mode: libtorrent creates files on demand as pieces arrive.
         # With sequential_download enabled, writes are always forward-seeking so
         # fragmentation doesn't occur — no need to pre-size files up front.
