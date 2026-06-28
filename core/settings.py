@@ -17,6 +17,8 @@ DEFAULTS: dict = {
     'window_y':           None,
     'window_w':           640,
     'window_h':           520,
+    'jackett_url':        '',
+    'jackett_api_key':    '',
 }
 
 

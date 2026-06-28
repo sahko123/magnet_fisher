@@ -31,6 +31,7 @@ from core.session import TorrentSession
 from ui.style import QSS
 from ui.download_window import DownloadWindow
 from ui.preview_dialog import PreviewDialog
+from ui.search_window import SearchWindow
 from utils.ipc import try_send_to_existing, start_listener
 from utils.magnet_handler import register as register_magnet_handler, is_registered
 
@@ -74,9 +75,10 @@ def main():
     if not is_registered():
         register_magnet_handler()
 
-    # Keep Python references to open preview dialogs so they aren't
+    # Keep Python references to open dialogs/windows so they aren't
     # garbage-collected while the user is interacting with them.
     _active_dialogs: set = set()
+    _search_window: SearchWindow | None = None
 
     # ── Thread-safe magnet delivery ────────────────────────────────────
     # start_listener() calls its callback from a background thread.
@@ -99,6 +101,15 @@ def main():
         dlg.raise_()
         dlg.activateWindow()
 
+    def open_search():
+        nonlocal _search_window
+        if _search_window is None or not _search_window.isVisible():
+            _search_window = SearchWindow(open_preview)
+        _search_window.show()
+        _search_window.raise_()
+        _search_window.activateWindow()
+
+    window.search_clicked.connect(open_search)
     _relay.received.connect(open_preview)
     start_listener(lambda uri: _relay.received.emit(uri))
 

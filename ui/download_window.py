@@ -237,6 +237,8 @@ class DownloadCard(QFrame):
 # ── Main window ────────────────────────────────────────────────────────
 
 class DownloadWindow(QMainWindow):
+    search_clicked = pyqtSignal()
+
     def __init__(self, session: TorrentSession):
         super().__init__()
         self._session    = session
@@ -257,6 +259,28 @@ class DownloadWindow(QMainWindow):
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+
+        # ── Header strip ───────────────────────────────────────────────
+        header = QWidget()
+        header.setObjectName('window-header')
+        hdr_layout = QHBoxLayout(header)
+        hdr_layout.setContentsMargins(16, 10, 16, 10)
+
+        title = QLabel('Magnet Fisher')
+        title.setObjectName('heading')
+        hdr_layout.addWidget(title)
+        hdr_layout.addStretch()
+
+        search_btn = QPushButton('Search')
+        search_btn.setObjectName('ghost')
+        search_btn.clicked.connect(self.search_clicked)
+        hdr_layout.addWidget(search_btn)
+
+        root.addWidget(header)
+
+        div = QFrame()
+        div.setFrameShape(QFrame.Shape.HLine)
+        root.addWidget(div)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)

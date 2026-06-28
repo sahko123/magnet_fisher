@@ -234,6 +234,30 @@ QFrame[frameShape="5"] {
 }
 
 /* ─────────────────────────────────────────────────────
+   Table Widget (search results)
+───────────────────────────────────────────────────── */
+QTableWidget {
+    background-color: #eaeaea;
+    border: 1px solid #d0d0d0;
+    border-radius: 4px;
+    outline: none;
+    alternate-background-color: #e4e4e4;
+    gridline-color: #d8d8d8;
+}
+QTableWidget::item {
+    padding: 4px 8px;
+}
+QTableWidget::item:hover    { background-color: #d8d8d8; }
+QTableWidget::item:selected { background-color: #a8c8e8; color: #1a1a1a; }
+
+/* ─────────────────────────────────────────────────────
+   Window header strip
+───────────────────────────────────────────────────── */
+QWidget#window-header {
+    background-color: #f5f5f5;
+}
+
+/* ─────────────────────────────────────────────────────
    Tooltips
 ───────────────────────────────────────────────────── */
 QToolTip {
