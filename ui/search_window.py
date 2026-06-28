@@ -35,6 +35,13 @@ class SearchWindow(QWidget):
         self._relay.error.connect(self._on_error)
         self._settings = app_settings.load()
 
+        # Try to read Jackett config directly from its own ServerConfig.json.
+        # Falls back to saved settings, then empty strings.
+        auto_url, auto_key = jackett.local_config()
+        self._auto_detected = bool(auto_url and auto_key)
+        self._jackett_url = auto_url or self._settings.get('jackett_url', '')
+        self._jackett_key = auto_key or self._settings.get('jackett_api_key', '')
+
         self.setWindowTitle('Search — Magnet Fisher')
         self.setMinimumSize(820, 500)
         self.resize(980, 620)
@@ -46,25 +53,32 @@ class SearchWindow(QWidget):
         root.setSpacing(10)
 
         # ── Jackett config ─────────────────────────────────────────────
-        cfg = QHBoxLayout()
-        cfg.setSpacing(8)
-        cfg.addWidget(QLabel('Jackett URL'))
+        # Show a simple status badge when auto-detected; show editable
+        # fields only when we couldn't read Jackett's own config.
+        if self._auto_detected:
+            badge = QLabel(f'Jackett: {self._jackett_url}  •  auto-detected')
+            badge.setObjectName('muted')
+            root.addWidget(badge)
+        else:
+            cfg = QHBoxLayout()
+            cfg.setSpacing(8)
+            cfg.addWidget(QLabel('Jackett URL'))
 
-        self._url_input = QLineEdit()
-        self._url_input.setPlaceholderText('http://localhost:9117')
-        self._url_input.setText(self._settings.get('jackett_url', ''))
-        self._url_input.setFixedWidth(220)
-        cfg.addWidget(self._url_input)
+            self._url_input = QLineEdit()
+            self._url_input.setPlaceholderText('http://localhost:9117')
+            self._url_input.setText(self._jackett_url)
+            self._url_input.setFixedWidth(220)
+            cfg.addWidget(self._url_input)
 
-        cfg.addWidget(QLabel('API Key'))
+            cfg.addWidget(QLabel('API Key'))
 
-        self._key_input = QLineEdit()
-        self._key_input.setPlaceholderText('your api key')
-        self._key_input.setText(self._settings.get('jackett_api_key', ''))
-        self._key_input.setFixedWidth(280)
-        cfg.addWidget(self._key_input)
-        cfg.addStretch()
-        root.addLayout(cfg)
+            self._key_input = QLineEdit()
+            self._key_input.setPlaceholderText('your api key')
+            self._key_input.setText(self._jackett_key)
+            self._key_input.setFixedWidth(280)
+            cfg.addWidget(self._key_input)
+            cfg.addStretch()
+            root.addLayout(cfg)
 
         # ── Search bar ─────────────────────────────────────────────────
         bar = QHBoxLayout()
@@ -84,7 +98,7 @@ class SearchWindow(QWidget):
 
         # ── Results table ──────────────────────────────────────────────
         self._table = QTableWidget(0, 6)
-        self._table.setHorizontalHeaderLabels(['Name', 'Size', 'Seeds', 'Leechers', 'Indexer', ''])
+        self._table.setHorizontalHeaderLabels(['Name', 'Size', 'Seeds', 'Peers', 'Indexer', ''])
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in (1, 2, 3, 4, 5):
@@ -105,26 +119,33 @@ class SearchWindow(QWidget):
     # ── Search ─────────────────────────────────────────────────────────
 
     def _do_search(self):
-        url   = self._url_input.text().strip()
-        key   = self._key_input.text().strip()
         query = self._query.text().strip()
-
-        if not url or not key:
-            self._status.setText('Enter Jackett URL and API key above.')
-            return
         if not query:
             return
 
-        self._settings['jackett_url']     = url
-        self._settings['jackett_api_key'] = key
-        app_settings.save(self._settings)
+        if self._auto_detected:
+            url = self._jackett_url
+            key = self._jackett_key
+        else:
+            url = self._url_input.text().strip()
+            key = self._key_input.text().strip()
+            if not url or not key:
+                self._status.setText('Enter Jackett URL and API key above.')
+                return
+            # Persist manual entries
+            self._settings['jackett_url']     = url
+            self._settings['jackett_api_key'] = key
+            app_settings.save(self._settings)
 
         self._table.setRowCount(0)
         self._btn.setEnabled(False)
-        self._status.setText('Searching…')
+        self._status.setText('Connecting to Jackett…')
 
         relay = self._relay
         def _run():
+            if not jackett.ensure_running(url):
+                relay.error.emit('Could not reach Jackett. Is it installed and running?')
+                return
             try:
                 relay.results.emit(jackett.search(url, key, query))
             except Exception as exc:
@@ -160,8 +181,10 @@ class SearchWindow(QWidget):
             self._table.setItem(row, 4, QTableWidgetItem(r['indexer']))
 
             magnet = r['magnet']
-            btn = QPushButton('Download')
+            btn = QPushButton('↓')
             btn.setObjectName('ghost')
+            btn.setFixedWidth(32)
+            btn.setToolTip('Download')
             btn.clicked.connect(lambda _checked, m=magnet: self._open_preview(m))
             self._table.setCellWidget(row, 5, btn)
 

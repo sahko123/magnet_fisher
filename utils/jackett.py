@@ -1,9 +1,66 @@
-import urllib.request
+import json
+import os
+import subprocess
+import time
+import urllib.error
 import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 _TORZNAB_NS = 'http://torznab.com/schemas/2015/feed'
 
+# ── Local Jackett detection ─────────────────────────────────────────────
+
+def local_config() -> tuple[str, str]:
+    """Read Jackett's ServerConfig.json → (base_url, api_key). Returns ('', '') on failure."""
+    cfg = Path(os.environ.get('APPDATA', '')) / 'Jackett' / 'ServerConfig.json'
+    try:
+        with open(cfg, encoding='utf-8') as f:
+            data = json.load(f)
+        port = data.get('Port', 9117)
+        key  = data.get('ApiKey', '')
+        if key:
+            return f'http://localhost:{port}', key
+    except Exception:
+        pass
+    return '', ''
+
+
+def ensure_running(base_url: str) -> bool:
+    """Return True if Jackett is reachable. If not, try launching JackettTray.exe and wait."""
+    if _ping(base_url):
+        return True
+
+    tray = _find_tray()
+    if not tray:
+        return False
+
+    subprocess.Popen([str(tray)], creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW)
+    for _ in range(15):
+        time.sleep(1)
+        if _ping(base_url):
+            return True
+    return False
+
+
+def _ping(base_url: str) -> bool:
+    try:
+        urllib.request.urlopen(f"{base_url.rstrip('/')}/api/v2.0/indexers", timeout=2)
+        return True
+    except Exception:
+        return False
+
+
+def _find_tray() -> Path | None:
+    for env in ('ProgramFiles', 'ProgramW6432', 'ProgramFiles(x86)'):
+        p = Path(os.environ.get(env, '')) / 'Jackett' / 'JackettTray.exe'
+        if p.exists():
+            return p
+    return None
+
+
+# ── Search ──────────────────────────────────────────────────────────────
 
 def search(base_url: str, api_key: str, query: str) -> list[dict]:
     params = urllib.parse.urlencode({'apikey': api_key, 't': 'search', 'q': query})
